@@ -1,5 +1,7 @@
 package bring
 
+import "encoding/json"
+
 type BringOptions struct {
 	Mail     string
 	Password string
@@ -96,10 +98,60 @@ type GetUserAccountResponse struct {
 	EmailVerified        bool            `json:"emailVerified"`
 	PremiumConfiguration map[string]bool `json:"premiumConfiguration"`
 	PublicUserUUID       string          `json:"publicUserUuid"`
-	UserLocale           string          `json:"userLocale"`
+	UserLocale           LocaleValue     `json:"userLocale"`
 	UserUUID             string          `json:"userUuid"`
 	Name                 string          `json:"name"`
 	PhotoPath            string          `json:"photoPath"`
+}
+
+// LocaleValue tolerates string or object values from the API.
+type LocaleValue struct {
+	Raw   json.RawMessage
+	Value string
+}
+
+func (l *LocaleValue) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		l.Raw = nil
+		l.Value = ""
+		return nil
+	}
+	l.Raw = append(l.Raw[:0], b...)
+
+	var str string
+	if err := json.Unmarshal(b, &str); err == nil {
+		l.Value = str
+		return nil
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(b, &obj); err == nil {
+		if v, ok := obj["locale"].(string); ok {
+			l.Value = v
+			return nil
+		}
+		if v, ok := obj["language"].(string); ok {
+			if c, ok := obj["country"].(string); ok && c != "" {
+				l.Value = v + "-" + c
+			} else {
+				l.Value = v
+			}
+			return nil
+		}
+	}
+
+	l.Value = ""
+	return nil
+}
+
+func (l LocaleValue) String() string {
+	if l.Value != "" {
+		return l.Value
+	}
+	if len(l.Raw) > 0 {
+		return string(l.Raw)
+	}
+	return ""
 }
 
 type GetActivityResponse struct {

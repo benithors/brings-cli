@@ -298,3 +298,14 @@ func TestNotifyUrgentMessagePayload(t *testing.T) {
 		t.Fatalf("notify failed: %v", err)
 	}
 }
+
+func TestUserLocaleObjectUnmarshal(t *testing.T) {
+	payload := []byte(`{"email":"test@example.com","emailVerified":true,"premiumConfiguration":{},"publicUserUuid":"pub","userLocale":{"language":"en","country":"US"},"userUuid":"user"}`)
+	var resp GetUserAccountResponse
+	if err := json.Unmarshal(payload, &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp.UserLocale.String() != "en-US" {
+		t.Fatalf("unexpected locale: %s", resp.UserLocale.String())
+	}
+}

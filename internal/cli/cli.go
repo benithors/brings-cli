@@ -555,7 +555,11 @@ func accountCommand() int {
 	} else {
 		fmt.Println("  Email Verified: No")
 	}
-	fmt.Printf("  Locale: %s\n", account.UserLocale)
+	locale := account.UserLocale.String()
+	if locale == "" {
+		locale = "N/A"
+	}
+	fmt.Printf("  Locale: %s\n", locale)
 	fmt.Printf("  User UUID: %s\n", account.UserUUID)
 	fmt.Printf("  Public UUID: %s\n", account.PublicUserUUID)
 	return 0
