@@ -1,5 +1,8 @@
 # brings-cli
 
+<img width="800" height="800" alt="image" src="https://github.com/user-attachments/assets/bf603be3-a7e1-4f61-acd2-7c5116fc5a92" />
+
+
 CLI for [Bring!](https://www.getbring.com/) Shopping Lists - manage lists, add recipes, and more.
 
 ## Installation
