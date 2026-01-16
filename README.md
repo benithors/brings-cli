@@ -16,6 +16,13 @@ Or install into your `$GOBIN`:
 go install ./cmd/brings
 ```
 
+## Homebrew
+
+```bash
+brew tap benithors/tap
+brew install brings-cli
+```
+
 ## Playwright (browser login)
 
 Browser-based login uses Playwright. The CLI will try to install Playwright automatically if needed, but you can also pre-install:
