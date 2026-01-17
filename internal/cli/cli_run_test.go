@@ -503,10 +503,9 @@ func TestRecipeCommandJSONOutput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/bringtemplates/content/") {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"title":     "Pasta",
-				"likeCount": 12,
-				"items": []map[string]interface{}{
-					{"itemId": "Tomato", "spec": "2"},
+				"title": "Pasta",
+				"nutrition": map[string]interface{}{
+					"calories": "200",
 				},
 			})
 			return
@@ -538,9 +537,9 @@ func TestRecipeCommandJSONOutput(t *testing.T) {
 	if payload["title"] != "Pasta" {
 		t.Fatalf("unexpected title: %#v", payload["title"])
 	}
-	ingredients, ok := payload["ingredients"].([]interface{})
-	if !ok || len(ingredients) != 1 {
-		t.Fatalf("unexpected ingredients: %#v", payload["ingredients"])
+	nutrition, ok := payload["nutrition"].(map[string]interface{})
+	if !ok || nutrition["calories"] != "200" {
+		t.Fatalf("unexpected nutrition: %#v", payload["nutrition"])
 	}
 }
 
@@ -693,6 +692,9 @@ func TestInspirationsJSONOutput(t *testing.T) {
 	}
 	if entry["imageUrl"] != "https://example.com/soup.jpg" {
 		t.Fatalf("unexpected imageUrl: %#v", entry["imageUrl"])
+	}
+	if entry["author"] != nil || entry["likes"] != nil || entry["linkOutUrl"] != nil {
+		t.Fatalf("unexpected extra fields: %#v", entry)
 	}
 }
 

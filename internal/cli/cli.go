@@ -90,16 +90,9 @@ func (f FlagSet) Get(name string) string {
 }
 
 type inspirationOutput struct {
-	ID         string   `json:"id,omitempty"`
-	Title      string   `json:"title,omitempty"`
-	Author     string   `json:"author,omitempty"`
-	Likes      int      `json:"likes,omitempty"`
-	Type       string   `json:"type,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	ImageURL   string   `json:"imageUrl,omitempty"`
-	LinkOutURL string   `json:"linkOutUrl,omitempty"`
-	IsAd       bool     `json:"isAd,omitempty"`
-	IsPromoted bool     `json:"isPromoted,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Title    string `json:"title,omitempty"`
+	ImageURL string `json:"imageUrl,omitempty"`
 }
 
 type inspirationsOutput struct {
@@ -125,17 +118,10 @@ type recipeIngredientOutput struct {
 }
 
 type recipeOutput struct {
-	ID             string                   `json:"id"`
-	Title          string                   `json:"title,omitempty"`
-	Author         string                   `json:"author,omitempty"`
-	Likes          int                      `json:"likes,omitempty"`
-	Servings       int                      `json:"servings,omitempty"`
-	TargetServings int                      `json:"targetServings,omitempty"`
-	Ingredients    []recipeIngredientOutput `json:"ingredients,omitempty"`
-	Instructions   []string                 `json:"instructions,omitempty"`
-	Nutrition      map[string]string        `json:"nutrition,omitempty"`
-	ImageURL       string                   `json:"imageUrl,omitempty"`
-	LinkOutURL     string                   `json:"linkOutUrl,omitempty"`
+	ID        string            `json:"id"`
+	Title     string            `json:"title,omitempty"`
+	ImageURL  string            `json:"imageUrl,omitempty"`
+	Nutrition map[string]string `json:"nutrition,omitempty"`
 }
 
 func parseArgs(args []string) (string, FlagSet, []string) {
@@ -906,19 +892,10 @@ func recipeCommand(positional []string, flags FlagSet) int {
 
 	if format != "human" {
 		output := recipeOutput{
-			ID:           contentUUID,
-			Title:        title,
-			Author:       author,
-			Likes:        likes,
-			Servings:     recipeServings,
-			Ingredients:  ingredients,
-			Instructions: instructions,
-			Nutrition:    nutrition,
-			ImageURL:     imageURLFromContent(recipe),
-			LinkOutURL:   toString(recipe["linkOutUrl"]),
-		}
-		if targetServings > 0 {
-			output.TargetServings = targetServings
+			ID:        contentUUID,
+			Title:     title,
+			ImageURL:  imageURLFromContent(recipe),
+			Nutrition: nutrition,
 		}
 		printJSON(output, pretty)
 		return 0
@@ -974,26 +951,11 @@ func recipeCommand(positional []string, flags FlagSet) int {
 		}
 	}
 
-	if recipe["instructions"] != nil || recipe["steps"] != nil {
-		steps := recipe["instructions"]
-		if steps == nil {
-			steps = recipe["steps"]
-		}
+	if len(instructions) > 0 {
 		fmt.Println()
 		fmt.Println("Instructions:")
-		switch v := steps.(type) {
-		case []interface{}:
-			for i, step := range v {
-				if text, ok := step.(string); ok {
-					fmt.Printf("  %d. %s\n", i+1, text)
-					continue
-				}
-				m := toMap(step)
-				text := coalesce(toString(m["text"]), toString(m["description"]))
-				fmt.Printf("  %d. %s\n", i+1, text)
-			}
-		case string:
-			fmt.Printf("  %s\n", v)
+		for i, step := range instructions {
+			fmt.Printf("  %d. %s\n", i+1, step)
 		}
 	}
 
@@ -1079,33 +1041,26 @@ func inspirationsCommand(positional []string, flags FlagSet) int {
 	}
 
 	if format != "human" {
-		entries := make([]inspirationOutput, 0, len(inspirations.Entries))
-		for _, entry := range inspirations.Entries {
+		limit := len(inspirations.Entries)
+		if limit > 20 {
+			limit = 20
+		}
+		entries := make([]inspirationOutput, 0, limit)
+		for _, entry := range inspirations.Entries[:limit] {
 			content := toMap(entry["content"])
 			if len(content) == 0 {
 				content = entry
 			}
 			item := inspirationOutput{
-				ID:         coalesce(toString(content["contentUuid"]), toString(content["uuid"]), toString(entry["uuid"])),
-				Title:      coalesce(toString(content["title"]), toString(content["name"]), toString(content["campaign"])),
-				Author:     coalesce(toString(content["author"]), toString(content["attribution"])),
-				Likes:      toInt(content["likeCount"]),
-				Type:       coalesce(toString(content["type"]), toString(entry["type"])),
-				Tags:       toStringSlice(toSlice(content["tags"])),
-				ImageURL:   imageURLFromContent(content),
-				LinkOutURL: toString(content["linkOutUrl"]),
-				IsAd:       toBool(content["isAd"]),
-				IsPromoted: toBool(content["isPromoted"]),
+				ID:       coalesce(toString(content["contentUuid"]), toString(content["uuid"]), toString(entry["uuid"])),
+				Title:    coalesce(toString(content["title"]), toString(content["name"]), toString(content["campaign"])),
+				ImageURL: imageURLFromContent(content),
 			}
 			entries = append(entries, item)
 		}
-		count := inspirations.Count
-		if count == 0 {
-			count = len(entries)
-		}
 		printJSON(inspirationsOutput{
 			Filter:  filter,
-			Count:   count,
+			Count:   len(entries),
 			Total:   inspirations.Total,
 			Entries: entries,
 		}, pretty)
