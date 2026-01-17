@@ -74,6 +74,9 @@ brings inspirations
 # Browse global inspirations stream
 brings inspirations all
 
+# Include image URLs
+brings inspirations all --images
+
 # View recipe details
 brings recipe <id>
 
@@ -111,7 +114,9 @@ Shopping List:
 
 Recipes:
   inspirations [filter]     List saved recipes with IDs
+    --images                Include image URLs
   recipe <id>               Show recipe details
+    --images                Include image URLs
   add-recipe <id>           Add ingredients to shopping list
     --servings <n>          Scale for n servings
     --all                   Include pantry items

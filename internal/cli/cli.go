@@ -837,6 +837,11 @@ func recipeCommand(positional []string, flags FlagSet) int {
 	if likes := toInt(recipe["likeCount"]); likes > 0 {
 		fmt.Printf("Likes: %d\n", likes)
 	}
+	if flags.Has("images") || flags.Has("image") {
+		if image := imageURLFromContent(recipe); image != "" {
+			fmt.Printf("Image: %s\n", image)
+		}
+	}
 
 	recipeServings := parseServings(recipe["yield"], recipe["baseQuantity"], recipe["servings"])
 	targetServings := 0
@@ -1018,6 +1023,11 @@ func inspirationsCommand(positional []string, flags FlagSet) int {
 		if uuid != "" {
 			fmt.Printf("    ID: %s\n", uuid)
 		}
+		if flags.Has("images") || flags.Has("image") {
+			if image := imageURLFromContent(content); image != "" {
+				fmt.Printf("    Image: %s\n", image)
+			}
+		}
 		if tags := toSlice(content["tags"]); len(tags) > 0 {
 			relevant := []string{}
 			for _, tag := range tags {
@@ -1137,7 +1147,9 @@ Shopping List:
 Recipes (for AI agents):
   inspirations [filter]     List saved recipes with IDs and tags
     --filters                 Show available filter tags
+    --images                  Include image URLs
   recipe <id>               Show recipe details and ingredients
+    --images                  Include image URLs
   add-recipe <id>           Add recipe ingredients to shopping list
     --servings <n>            Scale for n servings (default: config or recipe)
     --all                     Include pantry items (salt, pepper, etc.)
@@ -1275,6 +1287,56 @@ func toSlice(value interface{}) []interface{} {
 		return s
 	}
 	return []interface{}{}
+}
+
+func imageURLFromContent(content map[string]interface{}) string {
+	if url := toString(content["imageUrl"]); url != "" {
+		return url
+	}
+	if url := toString(content["imageURL"]); url != "" {
+		return url
+	}
+	if url := toString(content["thumbnailUrl"]); url != "" {
+		return url
+	}
+	if url := toString(content["previewImageUrl"]); url != "" {
+		return url
+	}
+	if url := toString(content["imagePreviewUrl"]); url != "" {
+		return url
+	}
+	if url := toString(content["imagePreviewUrlSquare"]); url != "" {
+		return url
+	}
+	if image := content["image"]; image != nil {
+		if url := toString(image); url != "" {
+			return url
+		}
+		if m, ok := image.(map[string]interface{}); ok {
+			if url := toString(m["url"]); url != "" {
+				return url
+			}
+			if url := toString(m["imageUrl"]); url != "" {
+				return url
+			}
+		}
+	}
+	if images := toSlice(content["images"]); len(images) > 0 {
+		for _, image := range images {
+			if url := toString(image); url != "" {
+				return url
+			}
+			if m, ok := image.(map[string]interface{}); ok {
+				if url := toString(m["url"]); url != "" {
+					return url
+				}
+				if url := toString(m["imageUrl"]); url != "" {
+					return url
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func parseServings(values ...interface{}) int {

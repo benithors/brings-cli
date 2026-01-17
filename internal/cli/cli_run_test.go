@@ -499,6 +499,37 @@ func TestRecipeCommandOutput(t *testing.T) {
 	}
 }
 
+func TestRecipeCommandImagesOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/bringtemplates/content/") {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"title":    "Pasta",
+				"imageUrl": "https://example.com/pasta.jpg",
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("BRINGS_BASE_URL", server.URL)
+	if err := saveConfig(Config{AccessToken: "token", UserUUID: "user-uuid"}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1", "--images"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	if !strings.Contains(stdout, "Image: https://example.com/pasta.jpg") {
+		t.Fatalf("unexpected stdout: %s", stdout)
+	}
+}
+
 func TestInspirationsFiltersOutput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/bringusers/user-uuid/inspirationstreamfilters" {
@@ -567,6 +598,43 @@ func TestInspirationsListOutput(t *testing.T) {
 		t.Fatalf("unexpected stderr: %s", stderr)
 	}
 	if !strings.Contains(stdout, "Soup") || !strings.Contains(stdout, "ID: abc-123") || !strings.Contains(stdout, "Tags: seasonal") {
+		t.Fatalf("unexpected stdout: %s", stdout)
+	}
+}
+
+func TestInspirationsImagesOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/inspirations") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"content": map[string]interface{}{
+					"title":       "Toast",
+					"contentUuid": "img-123",
+					"imageUrl":    "https://example.com/toast.jpg",
+				}},
+			},
+			"total": 1,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("BRINGS_BASE_URL", server.URL)
+	if err := saveConfig(Config{AccessToken: "token", UserUUID: "user-uuid"}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	stdout, stderr, code := runCLI([]string{"inspirations", "--images"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	if !strings.Contains(stdout, "Image: https://example.com/toast.jpg") {
 		t.Fatalf("unexpected stdout: %s", stdout)
 	}
 }
