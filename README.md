@@ -71,6 +71,10 @@ Browse and add recipe ingredients to your shopping list:
 # List saved recipes (JSON by default)
 brings inspirations
 
+# JSON output fields (default):
+# inspirations: {id, title, imageUrl}
+# recipe: {id, title, imageUrl, nutrition}
+
 # Human-friendly output
 brings inspirations --format human
 
