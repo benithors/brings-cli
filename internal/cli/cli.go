@@ -948,9 +948,15 @@ func inspirationsCommand(positional []string, flags FlagSet) int {
 		}
 		fmt.Println("Available Filters:")
 		fmt.Println()
+		seen := map[string]bool{}
 		for _, filter := range filters.Filters {
 			m := toMap(filter)
-			fmt.Printf("  - %s: %s\n", coalesce(toString(m["tag"]), toString(m["id"])), coalesce(toString(m["name"]), toString(m["label"])))
+			tag := coalesce(toString(m["tag"]), toString(m["id"]))
+			seen[tag] = true
+			fmt.Printf("  - %s: %s\n", tag, coalesce(toString(m["name"]), toString(m["label"])))
+		}
+		if !seen["all"] {
+			fmt.Println("  - all: All (global stream)")
 		}
 		return 0
 	}

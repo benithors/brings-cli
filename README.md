@@ -71,6 +71,9 @@ Browse and add recipe ingredients to your shopping list:
 # List saved recipes
 brings inspirations
 
+# Browse global inspirations stream
+brings inspirations all
+
 # View recipe details
 brings recipe <id>
 
