@@ -484,7 +484,7 @@ func TestRecipeCommandOutput(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1"})
+	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1", "--format", "human"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -496,6 +496,51 @@ func TestRecipeCommandOutput(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "4 l Milk") || !strings.Contains(stdout, "2 tsp Salt (pantry)") {
 		t.Fatalf("unexpected stdout: %s", stdout)
+	}
+}
+
+func TestRecipeCommandJSONOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/bringtemplates/content/") {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"title":     "Pasta",
+				"likeCount": 12,
+				"items": []map[string]interface{}{
+					{"itemId": "Tomato", "spec": "2"},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("BRINGS_BASE_URL", server.URL)
+	if err := saveConfig(Config{AccessToken: "token", UserUUID: "user-uuid"}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("invalid json output: %v", err)
+	}
+	if payload["id"] != "recipe-1" {
+		t.Fatalf("unexpected id: %#v", payload["id"])
+	}
+	if payload["title"] != "Pasta" {
+		t.Fatalf("unexpected title: %#v", payload["title"])
+	}
+	ingredients, ok := payload["ingredients"].([]interface{})
+	if !ok || len(ingredients) != 1 {
+		t.Fatalf("unexpected ingredients: %#v", payload["ingredients"])
 	}
 }
 
@@ -518,7 +563,7 @@ func TestRecipeCommandImagesOutput(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1", "--images"})
+	stdout, stderr, code := runCLI([]string{"recipe", "recipe-1", "--format", "human", "--images"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -550,7 +595,7 @@ func TestInspirationsFiltersOutput(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	stdout, stderr, code := runCLI([]string{"inspirations", "--filters"})
+	stdout, stderr, code := runCLI([]string{"inspirations", "--filters", "--format", "human"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -590,7 +635,7 @@ func TestInspirationsListOutput(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	stdout, stderr, code := runCLI([]string{"inspirations"})
+	stdout, stderr, code := runCLI([]string{"inspirations", "--format", "human"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -599,6 +644,55 @@ func TestInspirationsListOutput(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Soup") || !strings.Contains(stdout, "ID: abc-123") || !strings.Contains(stdout, "Tags: seasonal") {
 		t.Fatalf("unexpected stdout: %s", stdout)
+	}
+}
+
+func TestInspirationsJSONOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/inspirations") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"entries": []map[string]interface{}{
+				{"content": map[string]interface{}{
+					"title":       "Soup",
+					"contentUuid": "abc-123",
+					"imageUrl":    "https://example.com/soup.jpg",
+				}},
+			},
+			"total": 1,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("BRINGS_BASE_URL", server.URL)
+	if err := saveConfig(Config{AccessToken: "token", UserUUID: "user-uuid"}); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	stdout, stderr, code := runCLI([]string{"inspirations"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %s", stderr)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("invalid json output: %v", err)
+	}
+	entries, ok := payload["entries"].([]interface{})
+	if !ok || len(entries) != 1 {
+		t.Fatalf("unexpected entries: %#v", payload["entries"])
+	}
+	entry := entries[0].(map[string]interface{})
+	if entry["title"] != "Soup" {
+		t.Fatalf("unexpected title: %#v", entry["title"])
+	}
+	if entry["imageUrl"] != "https://example.com/soup.jpg" {
+		t.Fatalf("unexpected imageUrl: %#v", entry["imageUrl"])
 	}
 }
 
@@ -627,7 +721,7 @@ func TestInspirationsImagesOutput(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 
-	stdout, stderr, code := runCLI([]string{"inspirations", "--images"})
+	stdout, stderr, code := runCLI([]string{"inspirations", "--format", "human", "--images"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}

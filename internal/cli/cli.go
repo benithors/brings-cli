@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -86,6 +87,55 @@ func (f FlagSet) Has(name string) bool {
 
 func (f FlagSet) Get(name string) string {
 	return f.Values[name]
+}
+
+type inspirationOutput struct {
+	ID         string   `json:"id,omitempty"`
+	Title      string   `json:"title,omitempty"`
+	Author     string   `json:"author,omitempty"`
+	Likes      int      `json:"likes,omitempty"`
+	Type       string   `json:"type,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	ImageURL   string   `json:"imageUrl,omitempty"`
+	LinkOutURL string   `json:"linkOutUrl,omitempty"`
+	IsAd       bool     `json:"isAd,omitempty"`
+	IsPromoted bool     `json:"isPromoted,omitempty"`
+}
+
+type inspirationsOutput struct {
+	Filter  string              `json:"filter,omitempty"`
+	Count   int                 `json:"count"`
+	Total   int                 `json:"total,omitempty"`
+	Entries []inspirationOutput `json:"entries"`
+}
+
+type inspirationFilterOutput struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+type inspirationFiltersOutput struct {
+	Filters []inspirationFilterOutput `json:"filters"`
+}
+
+type recipeIngredientOutput struct {
+	Name   string `json:"name,omitempty"`
+	Spec   string `json:"spec,omitempty"`
+	Pantry bool   `json:"pantry,omitempty"`
+}
+
+type recipeOutput struct {
+	ID             string                   `json:"id"`
+	Title          string                   `json:"title,omitempty"`
+	Author         string                   `json:"author,omitempty"`
+	Likes          int                      `json:"likes,omitempty"`
+	Servings       int                      `json:"servings,omitempty"`
+	TargetServings int                      `json:"targetServings,omitempty"`
+	Ingredients    []recipeIngredientOutput `json:"ingredients,omitempty"`
+	Instructions   []string                 `json:"instructions,omitempty"`
+	Nutrition      map[string]string        `json:"nutrition,omitempty"`
+	ImageURL       string                   `json:"imageUrl,omitempty"`
+	LinkOutURL     string                   `json:"linkOutUrl,omitempty"`
 }
 
 func parseArgs(args []string) (string, FlagSet, []string) {
@@ -821,27 +871,19 @@ func recipeCommand(positional []string, flags FlagSet) int {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		return 1
 	}
+	format, pretty, err := parseOutputFormat(flags, "json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return 1
+	}
 	if flags.Has("debug") {
-		pretty, _ := json.MarshalIndent(recipe, "", "  ")
-		fmt.Println(string(pretty))
+		printJSON(recipe, true)
 		return 0
 	}
 
 	title := coalesce(toString(recipe["title"]), toString(recipe["name"]), "Recipe")
-	fmt.Printf("\n%s\n", title)
-	fmt.Println(strings.Repeat("=", len(title)))
-
-	if author := toString(recipe["author"]); author != "" {
-		fmt.Printf("Source: %s\n", author)
-	}
-	if likes := toInt(recipe["likeCount"]); likes > 0 {
-		fmt.Printf("Likes: %d\n", likes)
-	}
-	if flags.Has("images") || flags.Has("image") {
-		if image := imageURLFromContent(recipe); image != "" {
-			fmt.Printf("Image: %s\n", image)
-		}
-	}
+	author := coalesce(toString(recipe["author"]), toString(recipe["attribution"]))
+	likes := toInt(recipe["likeCount"])
 
 	recipeServings := parseServings(recipe["yield"], recipe["baseQuantity"], recipe["servings"])
 	targetServings := 0
@@ -858,6 +900,45 @@ func recipeCommand(positional []string, flags FlagSet) int {
 		scale = float64(targetServings) / float64(recipeServings)
 	}
 
+	ingredients := recipeIngredients(recipe, scale)
+	nutrition := recipeNutrition(recipe)
+	instructions := recipeInstructions(recipe)
+
+	if format != "human" {
+		output := recipeOutput{
+			ID:           contentUUID,
+			Title:        title,
+			Author:       author,
+			Likes:        likes,
+			Servings:     recipeServings,
+			Ingredients:  ingredients,
+			Instructions: instructions,
+			Nutrition:    nutrition,
+			ImageURL:     imageURLFromContent(recipe),
+			LinkOutURL:   toString(recipe["linkOutUrl"]),
+		}
+		if targetServings > 0 {
+			output.TargetServings = targetServings
+		}
+		printJSON(output, pretty)
+		return 0
+	}
+
+	fmt.Printf("\n%s\n", title)
+	fmt.Println(strings.Repeat("=", len(title)))
+
+	if author != "" {
+		fmt.Printf("Source: %s\n", author)
+	}
+	if likes > 0 {
+		fmt.Printf("Likes: %d\n", likes)
+	}
+	if flags.Has("images") || flags.Has("image") {
+		if image := imageURLFromContent(recipe); image != "" {
+			fmt.Printf("Image: %s\n", image)
+		}
+	}
+
 	if recipeServings > 0 {
 		if scale != 1 && targetServings > 0 {
 			fmt.Printf("Servings: %d -> scaled to %d\n", recipeServings, targetServings)
@@ -866,45 +947,29 @@ func recipeCommand(positional []string, flags FlagSet) int {
 		}
 	}
 
-	if nutrition, ok := recipe["nutrition"].(map[string]interface{}); ok {
+	if len(nutrition) > 0 {
 		nutritionKeys := []string{}
 		for key := range nutrition {
 			nutritionKeys = append(nutritionKeys, key)
 		}
 		sort.Strings(nutritionKeys)
-		entries := []string{}
+		fmt.Println("\nNutrition:")
 		for _, key := range nutritionKeys {
-			value := toString(nutrition[key])
-			if value != "" {
-				entries = append(entries, fmt.Sprintf("  %s: %s", key, value))
-			}
-		}
-		if len(entries) > 0 {
-			fmt.Println("\nNutrition:")
-			for _, line := range entries {
-				fmt.Println(line)
-			}
+			fmt.Printf("  %s: %s\n", key, nutrition[key])
 		}
 	}
 
-	items := toSlice(recipe["items"])
-	if len(items) == 0 {
-		items = toSlice(recipe["ingredients"])
-	}
-	if len(items) > 0 {
+	if len(ingredients) > 0 {
 		fmt.Println("\nIngredients:")
-		for _, item := range items {
-			m := toMap(item)
-			name := coalesce(toString(m["itemId"]), toString(m["name"]), toString(m["text"]))
-			spec := scaleSpec(toString(m["spec"]), scale)
+		for _, item := range ingredients {
 			stockNote := ""
-			if toBool(m["stock"]) {
+			if item.Pantry {
 				stockNote = " (pantry)"
 			}
-			if spec != "" {
-				fmt.Printf("  - %s %s%s\n", spec, name, stockNote)
+			if item.Spec != "" {
+				fmt.Printf("  - %s %s%s\n", item.Spec, item.Name, stockNote)
 			} else {
-				fmt.Printf("  - %s%s\n", name, stockNote)
+				fmt.Printf("  - %s%s\n", item.Name, stockNote)
 			}
 		}
 	}
@@ -945,35 +1010,106 @@ func inspirationsCommand(positional []string, flags FlagSet) int {
 		return 1
 	}
 
-	if flags.Has("filters") {
-		filters, err := client.GetInspirationFilters(context.Background())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-			return 1
-		}
-		fmt.Println("Available Filters:")
-		fmt.Println()
-		seen := map[string]bool{}
-		for _, filter := range filters.Filters {
-			m := toMap(filter)
-			tag := coalesce(toString(m["tag"]), toString(m["id"]))
-			seen[tag] = true
-			fmt.Printf("  - %s: %s\n", tag, coalesce(toString(m["name"]), toString(m["label"])))
-		}
-		if !seen["all"] {
-			fmt.Println("  - all: All (global stream)")
-		}
-		return 0
+	format, pretty, err := parseOutputFormat(flags, "json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return 1
 	}
 
 	filter := "mine"
 	if len(positional) > 0 {
 		filter = positional[0]
 	}
+
+	if flags.Has("filters") {
+		filters, err := client.GetInspirationFilters(context.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			return 1
+		}
+		if format == "human" {
+			fmt.Println("Available Filters:")
+			fmt.Println()
+			seen := map[string]bool{}
+			for _, filter := range filters.Filters {
+				m := toMap(filter)
+				tag := coalesce(toString(m["tag"]), toString(m["id"]))
+				seen[tag] = true
+				fmt.Printf("  - %s: %s\n", tag, coalesce(toString(m["name"]), toString(m["label"])))
+			}
+			if !seen["all"] {
+				fmt.Println("  - all: All (global stream)")
+			}
+			return 0
+		}
+
+		filterEntries := []inspirationFilterOutput{}
+		seen := map[string]bool{}
+		for _, filter := range filters.Filters {
+			m := toMap(filter)
+			tag := coalesce(toString(m["tag"]), toString(m["id"]))
+			if tag == "" {
+				continue
+			}
+			seen[tag] = true
+			filterEntries = append(filterEntries, inspirationFilterOutput{
+				ID:   tag,
+				Name: coalesce(toString(m["name"]), toString(m["label"])),
+			})
+		}
+		if !seen["all"] {
+			filterEntries = append(filterEntries, inspirationFilterOutput{
+				ID:   "all",
+				Name: "All (global stream)",
+			})
+		}
+		printJSON(inspirationFiltersOutput{Filters: filterEntries}, pretty)
+		return 0
+	}
+
 	inspirations, err := client.GetInspirations(context.Background(), filter)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		return 1
+	}
+
+	if flags.Has("debug") {
+		printJSON(inspirations, true)
+		return 0
+	}
+
+	if format != "human" {
+		entries := make([]inspirationOutput, 0, len(inspirations.Entries))
+		for _, entry := range inspirations.Entries {
+			content := toMap(entry["content"])
+			if len(content) == 0 {
+				content = entry
+			}
+			item := inspirationOutput{
+				ID:         coalesce(toString(content["contentUuid"]), toString(content["uuid"]), toString(entry["uuid"])),
+				Title:      coalesce(toString(content["title"]), toString(content["name"]), toString(content["campaign"])),
+				Author:     coalesce(toString(content["author"]), toString(content["attribution"])),
+				Likes:      toInt(content["likeCount"]),
+				Type:       coalesce(toString(content["type"]), toString(entry["type"])),
+				Tags:       toStringSlice(toSlice(content["tags"])),
+				ImageURL:   imageURLFromContent(content),
+				LinkOutURL: toString(content["linkOutUrl"]),
+				IsAd:       toBool(content["isAd"]),
+				IsPromoted: toBool(content["isPromoted"]),
+			}
+			entries = append(entries, item)
+		}
+		count := inspirations.Count
+		if count == 0 {
+			count = len(entries)
+		}
+		printJSON(inspirationsOutput{
+			Filter:  filter,
+			Count:   count,
+			Total:   inspirations.Total,
+			Entries: entries,
+		}, pretty)
+		return 0
 	}
 
 	fmt.Printf("Inspirations (%s):\n\n", filter)
@@ -988,12 +1124,6 @@ func inspirationsCommand(positional []string, flags FlagSet) int {
 	}
 
 	for _, entry := range inspirations.Entries[:limit] {
-		if flags.Has("debug") {
-			pretty, _ := json.MarshalIndent(entry, "", "  ")
-			fmt.Println(string(pretty))
-			continue
-		}
-
 		content := toMap(entry["content"])
 		if len(content) == 0 {
 			content = entry
@@ -1147,8 +1277,10 @@ Shopping List:
 Recipes (for AI agents):
   inspirations [filter]     List saved recipes with IDs and tags
     --filters                 Show available filter tags
+    --format <mode>            Output format: json (default) | human | pretty
     --images                  Include image URLs
   recipe <id>               Show recipe details and ingredients
+    --format <mode>            Output format: json (default) | human | pretty
     --images                  Include image URLs
   add-recipe <id>           Add recipe ingredients to shopping list
     --servings <n>            Scale for n servings (default: config or recipe)
@@ -1289,6 +1421,54 @@ func toSlice(value interface{}) []interface{} {
 	return []interface{}{}
 }
 
+func toStringSlice(values []interface{}) []string {
+	out := []string{}
+	for _, value := range values {
+		if s := toString(value); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func parseOutputFormat(flags FlagSet, defaultFormat string) (string, bool, error) {
+	format := strings.ToLower(flags.Get("format"))
+	if format == "" {
+		if flags.Has("format") {
+			return "", false, errors.New("format requires a value: json | human | pretty")
+		}
+		format = defaultFormat
+	}
+
+	switch format {
+	case "json":
+		return "json", false, nil
+	case "pretty", "pretty-json", "json-pretty":
+		return "json", true, nil
+	case "human", "text":
+		return "human", false, nil
+	default:
+		return "", false, fmt.Errorf("unknown format: %s (use json | human | pretty)", format)
+	}
+}
+
+func printJSON(value interface{}, pretty bool) {
+	var (
+		data []byte
+		err  error
+	)
+	if pretty {
+		data, err = json.MarshalIndent(value, "", "  ")
+	} else {
+		data, err = json.Marshal(value)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		return
+	}
+	fmt.Println(string(data))
+}
+
 func imageURLFromContent(content map[string]interface{}) string {
 	if url := toString(content["imageUrl"]); url != "" {
 		return url
@@ -1337,6 +1517,78 @@ func imageURLFromContent(content map[string]interface{}) string {
 		}
 	}
 	return ""
+}
+
+func recipeIngredients(recipe map[string]interface{}, scale float64) []recipeIngredientOutput {
+	items := toSlice(recipe["items"])
+	if len(items) == 0 {
+		items = toSlice(recipe["ingredients"])
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	ingredients := make([]recipeIngredientOutput, 0, len(items))
+	for _, item := range items {
+		m := toMap(item)
+		name := coalesce(toString(m["itemId"]), toString(m["name"]), toString(m["text"]))
+		if name == "" {
+			continue
+		}
+		spec := scaleSpec(toString(m["spec"]), scale)
+		ingredients = append(ingredients, recipeIngredientOutput{
+			Name:   name,
+			Spec:   spec,
+			Pantry: toBool(m["stock"]),
+		})
+	}
+	return ingredients
+}
+
+func recipeInstructions(recipe map[string]interface{}) []string {
+	steps := recipe["instructions"]
+	if steps == nil {
+		steps = recipe["steps"]
+	}
+	switch v := steps.(type) {
+	case []interface{}:
+		lines := []string{}
+		for _, step := range v {
+			if text, ok := step.(string); ok {
+				if text != "" {
+					lines = append(lines, text)
+				}
+				continue
+			}
+			m := toMap(step)
+			text := coalesce(toString(m["text"]), toString(m["description"]))
+			if text != "" {
+				lines = append(lines, text)
+			}
+		}
+		return lines
+	case string:
+		if v != "" {
+			return []string{v}
+		}
+	}
+	return nil
+}
+
+func recipeNutrition(recipe map[string]interface{}) map[string]string {
+	raw, ok := recipe["nutrition"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	out := map[string]string{}
+	for key, value := range raw {
+		if val := toString(value); val != "" {
+			out[key] = val
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func parseServings(values ...interface{}) int {

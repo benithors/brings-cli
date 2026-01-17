@@ -68,17 +68,23 @@ brings complete Milk
 Browse and add recipe ingredients to your shopping list:
 
 ```bash
-# List saved recipes
+# List saved recipes (JSON by default)
 brings inspirations
+
+# Human-friendly output
+brings inspirations --format human
 
 # Browse global inspirations stream
 brings inspirations all
 
-# Include image URLs
-brings inspirations all --images
+# Include image URLs (human output)
+brings inspirations all --format human --images
 
-# View recipe details
+# View recipe details (JSON by default)
 brings recipe <id>
+
+# Human-friendly recipe details
+brings recipe <id> --format human
 
 # Add recipe ingredients to cart
 brings add-recipe <id>
@@ -114,8 +120,10 @@ Shopping List:
 
 Recipes:
   inspirations [filter]     List saved recipes with IDs
+    --format <mode>         Output format: json (default) | human | pretty
     --images                Include image URLs
   recipe <id>               Show recipe details
+    --format <mode>         Output format: json (default) | human | pretty
     --images                Include image URLs
   add-recipe <id>           Add ingredients to shopping list
     --servings <n>          Scale for n servings
