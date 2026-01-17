@@ -71,7 +71,7 @@ Browse and add recipe ingredients to your shopping list:
 # List saved recipes (JSON by default)
 brings inspirations
 
-# JSON output fields (default):
+# JSON output fields (default, best for agents):
 # inspirations: {id, title, imageUrl}
 # recipe: {id, title, imageUrl, nutrition}
 

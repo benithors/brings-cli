@@ -1233,11 +1233,11 @@ Recipes (for AI agents):
   inspirations [filter]     List saved recipes with IDs and tags
     --filters                 Show available filter tags
     --format <mode>            Output format: json (default) | human | pretty
-    JSON fields (default):     {id, title, imageUrl}
+    JSON fields (default):     {id, title, imageUrl} (best for agents)
     --images                  Include image URLs
   recipe <id>               Show recipe details and ingredients
     --format <mode>            Output format: json (default) | human | pretty
-    JSON fields (default):     {id, title, imageUrl, nutrition}
+    JSON fields (default):     {id, title, imageUrl, nutrition} (best for agents)
     --images                  Include image URLs
   add-recipe <id>           Add recipe ingredients to shopping list
     --servings <n>            Scale for n servings (default: config or recipe)
